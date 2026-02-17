@@ -1,0 +1,16 @@
+{
+  "requirements": [
+    {
+      "id": "starter-knight",
+      "label": "Starter Knight",
+      "required_classes": ["class-knight"],
+      "required_items": ["item-tiered-sword", "item-tiered-heavy-armor"]
+    },
+    {
+      "id": "starter-wizard",
+      "label": "Starter Wizard",
+      "required_classes": ["class-wizard"],
+      "required_items": ["item-tiered-staff", "item-tiered-robe"]
+    }
+  ]
+}
