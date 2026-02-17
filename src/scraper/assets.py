@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import imghdr
 import json
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -58,8 +57,7 @@ def validate_assets(records: list[dict], assets: list[AssetRecord], report_path:
             missing.append(entity_id)
             continue
 
-        kind = imghdr.what(image_path)
-        if not kind:
+        if not _is_supported_image(image_path):
             corrupt.append(entity_id)
 
     reverse_checksums: dict[str, list[str]] = {}
@@ -93,3 +91,30 @@ def _guess_extension(url: str) -> str:
         if lowered.endswith(f".{ext}"):
             return "jpg" if ext == "jpeg" else ext
     return "png"
+
+
+def _is_supported_image(image_path: Path) -> bool:
+    """Detect image files via magic bytes.
+
+    Python 3.13 removed ``imghdr`` from the stdlib, so we validate using
+    lightweight signature checks for the formats we download.
+    """
+
+    try:
+        header = image_path.read_bytes()[:16]
+    except OSError:
+        return False
+
+    if header.startswith(b"\x89PNG\r\n\x1a\n"):
+        return True
+
+    if header.startswith(b"\xff\xd8\xff"):
+        return True
+
+    if header.startswith((b"GIF87a", b"GIF89a")):
+        return True
+
+    if len(header) >= 12 and header[:4] == b"RIFF" and header[8:12] == b"WEBP":
+        return True
+
+    return False
