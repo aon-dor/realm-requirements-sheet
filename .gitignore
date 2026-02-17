@@ -1,0 +1,7 @@
+__pycache__/
+.pytest_cache/
+*.pyc
+src/assets/*
+!src/assets/.gitkeep
+data/raw/*.html
+data/normalized/*.json
