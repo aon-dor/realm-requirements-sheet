@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import imghdr
 import json
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -57,7 +58,7 @@ def validate_assets(records: list[dict], assets: list[AssetRecord], report_path:
             missing.append(entity_id)
             continue
 
-        kind = _sniff_image_type(image_path.read_bytes())
+        kind = imghdr.what(image_path)
         if not kind:
             corrupt.append(entity_id)
 
@@ -84,18 +85,6 @@ def validate_assets(records: list[dict], assets: list[AssetRecord], report_path:
         )
 
     return report
-
-
-def _sniff_image_type(payload: bytes) -> str | None:
-    if payload.startswith(b"\x89PNG\r\n\x1a\n"):
-        return "png"
-    if payload.startswith(b"\xff\xd8\xff"):
-        return "jpeg"
-    if payload.startswith((b"GIF87a", b"GIF89a")):
-        return "gif"
-    if payload.startswith(b"RIFF") and payload[8:12] == b"WEBP":
-        return "webp"
-    return None
 
 
 def _guess_extension(url: str) -> str:
