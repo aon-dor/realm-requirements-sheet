@@ -14,6 +14,9 @@ CATEGORY_PATHS: dict[str, str] = {
 }
 TIER_PATTERN = re.compile(r"\bT(\d{1,2})\b", re.IGNORECASE)
 TIER_ANCHOR_PATTERN = re.compile(r"^tier-(\d{1,2})$", re.IGNORECASE)
+SPECIAL_TIER_ANCHOR_PATTERN = re.compile(r"^(?:tier-)?(st|ut)$", re.IGNORECASE)
+UNTIERED_ANCHOR_PATTERN = re.compile(r"^untiered(?:-[a-z0-9-]+)?$", re.IGNORECASE)
+SET_ANCHOR_PATTERN = re.compile(r"^set(?:-[a-z0-9-]+)?$", re.IGNORECASE)
 SPECIAL_TIER_PATTERN = re.compile(r"\b(ST|UT)\b", re.IGNORECASE)
 CLASS_NAMES = {
     "archer",
@@ -56,6 +59,14 @@ class _ItemsTableParser(HTMLParser):
             tier_match = TIER_ANCHOR_PATTERN.match(tier_anchor)
             if tier_match:
                 self._current_tier = f"T{tier_match.group(1)}"
+            else:
+                special_tier_match = SPECIAL_TIER_ANCHOR_PATTERN.match(tier_anchor)
+                if special_tier_match:
+                    self._current_tier = special_tier_match.group(1).upper()
+                elif UNTIERED_ANCHOR_PATTERN.match(tier_anchor):
+                    self._current_tier = "UT"
+                elif SET_ANCHOR_PATTERN.match(tier_anchor):
+                    self._current_tier = "ST"
 
             if self._in_tr and self._in_cell:
                 self._current_link = {
