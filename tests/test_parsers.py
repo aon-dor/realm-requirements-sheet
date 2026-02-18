@@ -20,3 +20,52 @@ def test_parse_items_html_extracts_records() -> None:
     assert len(records) == 2
     assert records[0].id == "item-tiered-robe"
     assert records[1].tier == "T10"
+
+
+def test_parse_items_html_prefers_ut_st_and_ignores_classes() -> None:
+    html = """
+    <html><body>
+      <a name="tier-14"></a>
+      <table>
+        <tr>
+          <td><a href="/wiki/zaarvox-s-heart"><img src="/img/zaarvox.png" alt="Zaarvox's Heart"></a></td>
+          <td>ST</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/wretched-rags"><img src="/img/rags.png" alt="Wretched Rags"></a></td>
+          <td>UT</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/wizard">Wizard</a></td>
+          <td><a href="/wiki/wizard-robe"><img src="/img/wizard-robe.png" alt="Wizard Robe"></a></td>
+        </tr>
+      </table>
+    </body></html>
+    """
+
+    records = parse_items_html(html, default_item_type="Armor")
+    by_id = {row.id: row for row in records}
+
+    assert by_id["item-zaarvox-s-heart"].tier == "ST"
+    assert by_id["item-wretched-rags"].tier == "UT"
+    assert "item-wizard" not in by_id
+    assert "item-wizard-robe" in by_id
+
+
+def test_parse_items_html_expands_tiered_ring_bundle() -> None:
+    html = """
+    <html><body>
+      <table>
+        <tr>
+          <td><a href="/wiki/wisdom-rings"><img src="/img/wisdom.gif" alt="Wisdom Rings"></a></td>
+          <td>Some grouped entry</td>
+        </tr>
+      </table>
+    </body></html>
+    """
+
+    records = parse_items_html(html, default_item_type="Ring")
+
+    assert len(records) == 7
+    assert {record.tier for record in records} == {f"T{i}" for i in range(1, 8)}
+    assert records[0].name.endswith("(T1)")
