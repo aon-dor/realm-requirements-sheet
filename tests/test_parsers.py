@@ -69,3 +69,30 @@ def test_parse_items_html_expands_tiered_ring_bundle() -> None:
     assert len(records) == 7
     assert {record.tier for record in records} == {f"T{i}" for i in range(1, 8)}
     assert records[0].name.endswith("(T1)")
+
+
+def test_parse_items_html_reads_ut_st_from_named_sections() -> None:
+    html = """
+    <html><body>
+      <a name="untiered-rings"></a>
+      <table>
+        <tr>
+          <td><a href="/wiki/the-twilight-gemstone"><img src="/img/twilight.png" alt="The Twilight Gemstone"></a></td>
+          <td>Ring</td>
+        </tr>
+      </table>
+      <a name="set-rings"></a>
+      <table>
+        <tr>
+          <td><a href="/wiki/yokai-amulet"><img src="/img/yokai.png" alt="Yokai Amulet"></a></td>
+          <td>Ring</td>
+        </tr>
+      </table>
+    </body></html>
+    """
+
+    records = parse_items_html(html, default_item_type="Ring")
+    by_id = {row.id: row for row in records}
+
+    assert by_id["item-the-twilight-gemstone"].tier == "UT"
+    assert by_id["item-yokai-amulet"].tier == "ST"
