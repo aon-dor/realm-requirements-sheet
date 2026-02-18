@@ -13,7 +13,7 @@ from src.models.schema import (
 )
 from src.scraper.assets import download_assets, validate_assets
 from src.scraper.classes import CLASSES_PATH, parse_classes_html
-from src.scraper.items import ITEMS_PATH, parse_items_html
+from src.scraper.items import CATEGORY_PATHS, ITEMS_PATH, parse_items_html
 from src.scraper.realmeye_client import RealmEyeClient
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,12 +35,25 @@ def scrape_classes(client: RealmEyeClient) -> list[dict]:
 
 
 def scrape_items(client: RealmEyeClient) -> list[dict]:
-    html = client.fetch(ITEMS_PATH)
     RAW_DIR.mkdir(parents=True, exist_ok=True)
-    (RAW_DIR / "items.html").write_text(html, encoding="utf-8")
 
-    items = parse_items_html(html, client.base_url)
-    payload = [asdict(record) for record in items]
+    index_html = client.fetch(ITEMS_PATH)
+    (RAW_DIR / "items-index.html").write_text(index_html, encoding="utf-8")
+
+    records_by_id: dict[str, dict] = {}
+    category_paths = [path for path in CATEGORY_PATHS if path in index_html]
+    if not category_paths:
+        category_paths = list(CATEGORY_PATHS.keys())
+
+    for path in category_paths:
+        category_html = client.fetch(path)
+        slug = path.removeprefix('/wiki/')
+        (RAW_DIR / f"items-{slug}.html").write_text(category_html, encoding="utf-8")
+        parsed = parse_items_html(category_html, client.base_url, default_item_type=CATEGORY_PATHS[path])
+        for record in parsed:
+            records_by_id[record.id] = asdict(record)
+
+    payload = sorted(records_by_id.values(), key=lambda row: row["name"].lower())
     (NORMALIZED_DIR / "items.json").parent.mkdir(parents=True, exist_ok=True)
     (NORMALIZED_DIR / "items.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return payload

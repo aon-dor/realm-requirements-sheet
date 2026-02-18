@@ -5,95 +5,73 @@ from html.parser import HTMLParser
 
 from src.models.schema import ItemRecord, slugify
 
-ITEMS_PATH = "/wiki/items"
+ITEMS_PATH = "/wiki/equipment"
+CATEGORY_PATHS: dict[str, str] = {
+    "/wiki/weapons": "Weapon",
+    "/wiki/ability-items": "Ability",
+    "/wiki/armor": "Armor",
+    "/wiki/rings": "Ring",
+}
 TIER_PATTERN = re.compile(r"\bT(\d{1,2})\b", re.IGNORECASE)
+TIER_ANCHOR_PATTERN = re.compile(r"^tier-(\d{1,2})$", re.IGNORECASE)
 
 
 class _ItemsTableParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
-        self._in_row = False
-        self._in_cell = False
-        self._current_href: str | None = None
-        self._in_link = False
-        self._current_link_text: list[str] = []
-        self._current_row_cells: list[str] = []
-        self._current_cell_text: list[str] = []
-        self._current_icon_src: str | None = None
-        self._current_icon_alt: str | None = None
+        self._current_tier: str | None = None
+        self._current_item: dict[str, str] | None = None
         self.rows: list[dict[str, str | list[str]]] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attr_map = {k: (v or "") for k, v in attrs}
 
-        if tag == "tr":
-            self._in_row = True
-            self._current_row_cells = []
-            self._current_icon_src = None
-            self._current_icon_alt = None
-            self._current_href = None
-            self._current_link_text = []
-            self._in_link = False
-            return
-
-        if not self._in_row:
-            return
-
-        if tag == "td":
-            self._in_cell = True
-            self._current_cell_text = []
-            return
-
         if tag == "a":
+            tier_anchor = (attr_map.get("name") or "").strip().lower()
+            tier_match = TIER_ANCHOR_PATTERN.match(tier_anchor)
+            if tier_match:
+                self._current_tier = f"T{tier_match.group(1)}"
+
             href = attr_map.get("href", "")
             if href.startswith("/wiki/"):
-                self._current_href = href
-                self._in_link = True
+                self._current_item = {"href": href, "tier": self._current_tier or ""}
             return
 
-        if tag == "img":
+        if tag == "img" and self._current_item is not None:
             src = attr_map.get("src") or attr_map.get("data-src") or ""
             alt = (attr_map.get("alt") or "").strip()
             if src:
-                self._current_icon_src = src
+                self._current_item["icon_src"] = src
             if alt:
-                self._current_icon_alt = alt
+                self._current_item["name"] = alt
 
     def handle_data(self, data: str) -> None:
-        if not self._in_row:
+        if self._current_item is None:
             return
 
         text = data.strip()
         if not text:
             return
 
-        if self._in_cell:
-            self._current_cell_text.append(text)
-        if self._in_link:
-            self._current_link_text.append(text)
+        if "name" not in self._current_item:
+            self._current_item["name"] = text
 
     def handle_endtag(self, tag: str) -> None:
-        if tag == "td" and self._in_row and self._in_cell:
-            self._in_cell = False
-            self._current_row_cells.append(" ".join(self._current_cell_text).strip())
+        if tag != "a" or self._current_item is None:
             return
 
-        if tag == "a":
-            self._in_link = False
-            return
-
-        if tag == "tr" and self._in_row:
-            self._in_row = False
-            row = {
-                "href": self._current_href or "",
-                "name": " ".join(self._current_link_text).strip() or (self._current_icon_alt or ""),
-                "icon_src": self._current_icon_src or "",
-                "cells": self._current_row_cells,
-            }
-            self.rows.append(row)
+        row = {
+            "href": self._current_item.get("href", ""),
+            "name": self._current_item.get("name", ""),
+            "icon_src": self._current_item.get("icon_src", ""),
+            "tier": self._current_item.get("tier", ""),
+            "cells": [],
+        }
+        self.rows.append(row)
+        self._current_item = None
 
 
-def parse_items_html(html: str, base_url: str = "https://www.realmeye.com") -> list[ItemRecord]:
+def parse_items_html(html: str, base_url: str = "https://www.realmeye.com", default_item_type: str | None = None) -> list[ItemRecord]:
     parser = _ItemsTableParser()
     parser.feed(html)
 
@@ -105,13 +83,14 @@ def parse_items_html(html: str, base_url: str = "https://www.realmeye.com") -> l
         icon_src = str(row["icon_src"])
         name = str(row["name"]).strip()
         cells = [str(cell) for cell in row["cells"]]
+        row_tier = str(row.get("tier", "")).strip() or None
 
         if not href.startswith("/wiki/") or not icon_src or not name:
             continue
 
         tier_match = TIER_PATTERN.search(" ".join(cells))
-        tier = f"T{tier_match.group(1)}" if tier_match else None
-        item_type = cells[2] if len(cells) > 2 and cells[2] else None
+        tier = row_tier or (f"T{tier_match.group(1)}" if tier_match else None)
+        item_type = default_item_type or (cells[2] if len(cells) > 2 and cells[2] else None)
 
         record_id = f"item-{slugify(name)}"
         if record_id in seen_ids:
